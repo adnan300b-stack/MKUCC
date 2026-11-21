@@ -21,7 +21,6 @@ void PatchShujinkoToScorpion(void) {
     for (unsigned int addr = start_addr; addr < end_addr; addr += 4) {
         char *ptr = (char*)addr;
 
-        // 1. استبدال مجسم الجسم والرأس (13 حرفاً = 13 حرفاً)
         if (memcmp(ptr, "BODY_SHUJINKO", 13) == 0) {
             memcpy(ptr, "BODY_SCORPION", 13);
             patched++;
@@ -30,13 +29,10 @@ void PatchShujinkoToScorpion(void) {
             memcpy(ptr, "HEAD_SCORPION", 13);
             patched++;
         }
-        // 2. استبدال الزي البديل (21 حرفاً = 21 حرفاً)
         else if (memcmp(ptr, "body_shujinko_alt.sec", 21) == 0) {
             memcpy(ptr, "body_scorpion_alt.sec", 21);
             patched++;
         }
-        // 3. استبدال أساليب الضربات العادية لشوجينكو (MANTIS / SHAOLIN FIST / DAN TIEN DAO)
-        // بأساليب ضربات سكوربيون العادية (HAPKIDO / MOI FAH / MUGAI RYU)
         else if (memcmp(ptr, "MANTIS", 7) == 0) {
             memcpy(ptr, "HAPKIDO", 8);
             patched++;
@@ -49,7 +45,6 @@ void PatchShujinkoToScorpion(void) {
             memcpy(ptr, "MUGAI RYU\0\0\0", 13);
             patched++;
         }
-        // ملاحظة: نترك "shujinko.mko" كما هو دون تغيير ليبقى محتفظاً بالقدرات الخارقة (كرة الثلج، الخطاف...)
     }
 
     if (patched > 0) {
@@ -61,19 +56,18 @@ void PatchShujinkoToScorpion(void) {
 int MainThread(SceSize args, void *argp) {
     WriteLog("INFO: MKHybridMod initialized!\r\n");
 
-    // مسح الذاكرة على دفعات أثناء تحميل اللعبة لضمان التقاط الجدول قبل بدء القتال
     for (int i = 0; i < 15; i++) {
         PatchShujinkoToScorpion();
-        sceKernelDelayThread(500000); // كل نصف ثانية لمدة 7.5 ثوانٍ
+        sceKernelDelayThread(500000);
     }
 
     return sceKernelExitDeleteThread(0);
 }
 
-int module_start(SceSize args, void *argp) {
+int main(int argc, char **argv) {
     SceUID thid = sceKernelCreateThread("MKHybridThread", MainThread, 0x18, 0x4000, 0, NULL);
     if (thid >= 0) {
-        sceKernelStartThread(thid, args, argp);
+        sceKernelStartThread(thid, 0, NULL);
     }
     return 0;
 }
