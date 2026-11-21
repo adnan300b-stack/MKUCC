@@ -1,0 +1,39 @@
+name: Build PSP Plugin
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: pspdev/pspdev:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile PRX Plugin
+        run: make
+
+      - name: Package Plugin into Ready Folder
+        run: |
+          mkdir -p release/mkswap
+          cp mkswap.prx release/mkswap/
+          echo "[options]" > release/mkswap/plugins.ini
+          echo "type = prx" >> release/mkswap/plugins.ini
+          echo "filename = mkswap.prx" >> release/mkswap/plugins.ini
+          echo "version = 1" >> release/mkswap/plugins.ini
+          echo "" >> release/mkswap/plugins.ini
+          echo "[games]" >> release/mkswap/plugins.ini
+          echo "ULUS10102 = true" >> release/mkswap/plugins.ini
+          echo "chang(SCORPION>SHUJINKO)" > release/mkswap/settings.ini
+
+      - name: Upload ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkswap-plugin-ready
+          path: release/
+          
