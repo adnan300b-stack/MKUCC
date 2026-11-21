@@ -321,10 +321,10 @@ DumpBonesToFile();
 }
 return sceKernelExitDeleteThread(0);
 }
-int module_start(SceSize args, void *argp) {
+int main(int argc, char **argv) {
 SceUID thid = sceKernelCreateThread("MKSwapThread", MainThread, 0x18, 0x10000, 0, NULL);
 if (thid >= 0) {
-sceKernelStartThread(thid, args, argp);
+sceKernelStartThread(thid, 0, NULL);
 }
 return 0;
 }
