@@ -4,7 +4,6 @@
 #include <pspsysmem.h>
 #include <string.h>
 #include <stdio.h>
-#include <ctype.h>
 
 PSP_MODULE_INFO("MKModelSwapper", 0, 1, 1);
 
@@ -17,6 +16,24 @@ static SceUID memId = -1;
 static unsigned char *memPool = NULL;
 static unsigned int memOffset = 0;
 static unsigned int memTotalSize = 32768;
+
+int MyIsSpace(unsigned char c) {
+    return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f');
+}
+
+int MyIsUpper(unsigned char c) {
+    return (c >= 'A' && c <= 'Z');
+}
+
+unsigned char MyToUpper(unsigned char c) {
+    if (c >= 'a' && c <= 'z') return c - 32;
+    return c;
+}
+
+unsigned char MyToLower(unsigned char c) {
+    if (c >= 'A' && c <= 'Z') return c + 32;
+    return c;
+}
 
 void InitMemory(void) {
     memId = sceKernelAllocPartitionMemory(2, "MKSwapPool", PSP_SMEM_Low, memTotalSize, NULL);
@@ -58,8 +75,8 @@ void FormatName(char *str) {
     int i = 0, j = 0;
     while (*(str + i)) {
         unsigned char c = (unsigned char)(*(str + i));
-        if (!isspace(c)) {
-            *(str + j) = (char)toupper(c);
+        if (!MyIsSpace(c)) {
+            *(str + j) = (char)MyToUpper(c);
             j++;
         }
         i++;
@@ -106,7 +123,7 @@ void ParseRuleContent(char *start, int isCbmMode) {
             char *lowerModel = (char*)AllocMem(32);
             strcpy(lowerModel, r->modelChar);
             for (int k = 0; *(lowerModel + k); k++) {
-                *(lowerModel + k) = (char)tolower((unsigned char)(*(lowerModel + k)));
+                *(lowerModel + k) = (char)MyToLower((unsigned char)(*(lowerModel + k)));
             }
             sprintf(r->newBodyAlt, "body_%s_alt.sec", lowerModel);
 
@@ -167,7 +184,7 @@ void ApplyPointerSwaps(void) {
 
         strcpy(lowerFight, r->fightChar);
         for (int k = 0; *(lowerFight + k); k++) {
-            *(lowerFight + k) = (char)tolower((unsigned char)(*(lowerFight + k)));
+            *(lowerFight + k) = (char)MyToLower((unsigned char)(*(lowerFight + k)));
         }
         sprintf(targetAlt, "body_%s_alt.sec", lowerFight);
 
@@ -233,7 +250,7 @@ void DumpBonesToFile(void) {
     for (unsigned int addr = start_addr; addr < end_addr; addr += 4) {
         if (memcmp((void*)addr, "BODY_", 5) == 0) {
             char *charName = (char*)(addr + 5);
-            if (strlen(charName) > 2 && strlen(charName) < 20 && isupper((unsigned char)(*charName))) {
+            if (strlen(charName) > 2 && strlen(charName) < 20 && MyIsUpper((unsigned char)(*charName))) {
                 int len = sprintf(header, "[%s]\r\n", charName);
                 sceIoWrite(fd, header, len);
 
@@ -290,18 +307,16 @@ int MainThread(SceSize args, void *argp) {
 
     return sceKernelExitDeleteThread(0);
 }
-
 int module_start(SceSize args, void *argp) {
-    SceUID thid = sceKernelCreateThread("MKSwapThread", MainThread, 0x18, 0x10000, 0, NULL);
-    if (thid >= 0) {
-        sceKernelStartThread(thid, args, argp);
-    }
-    return 0;
+SceUID thid = sceKernelCreateThread("MKSwapThread", MainThread, 0x18, 0x10000, 0, NULL);
+if (thid >= 0) {
+sceKernelStartThread(thid, args, argp);
 }
-
+return 0;
+}
 int module_stop(SceSize args, void *argp) {
-    if (memId >= 0) {
-        sceKernelFreePartitionMemory(memId);
-    }
-    return 0;
+if (memId >= 0) {
+sceKernelFreePartitionMemory(memId);
+}
+return 0;
 }
