@@ -26,25 +26,27 @@ int MyIsUpper(unsigned char c) {
 }
 
 unsigned char MyToUpper(unsigned char c) {
-    if (c >= 'a' && c <= 'z') return c - 32;
+    if (c >= 'a' && c <= 'z') return (unsigned char)(c - 32);
     return c;
 }
 
 unsigned char MyToLower(unsigned char c) {
-    if (c >= 'A' && c <= 'Z') return c + 32;
+    if (c >= 'A' && c <= 'Z') return (unsigned char)(c + 32);
     return c;
 }
 
 void InitMemory(void) {
-    memId = sceKernelAllocPartitionMemory(2, "MKSwapPool", PSP_SMEM_Low, memTotalSize, NULL);
+    memId = sceKernelAllocPartitionMemory(1, "MKSwapPool", PSP_SMEM_Low, memTotalSize, NULL);
     if (memId >= 0) {
         memPool = (unsigned char*)sceKernelGetBlockHeadAddr(memId);
-        memset(memPool, 0, memTotalSize);
+        if (memPool != NULL) {
+            memset(memPool, 0, memTotalSize);
+        }
     }
 }
 
 void* AllocMem(unsigned int size) {
-    if (!memPool) return NULL;
+    if (memPool == NULL) return NULL;
     size = (size + 3) & ~3;
     if (memOffset + size >= memTotalSize) return NULL;
     void *ptr = (void*)(memPool + memOffset);
@@ -73,7 +75,7 @@ static int bGetBons = 0;
 
 void FormatName(char *str) {
     int i = 0, j = 0;
-    while (*(str + i)) {
+    while (*(str + i) != '\0') {
         unsigned char c = (unsigned char)(*(str + i));
         if (!MyIsSpace(c)) {
             *(str + j) = (char)MyToUpper(c);
@@ -85,13 +87,13 @@ void FormatName(char *str) {
 }
 
 void ParseRuleContent(char *start, int isCbmMode) {
-    if (ruleCount >= MAX_SWAPS || !rules) return;
+    if (ruleCount >= MAX_SWAPS || rules == NULL) return;
     char *sep = strchr(start, '>');
     char *end = strchr(start, ')');
 
     if (sep != NULL && end != NULL && sep < end) {
-        int len1 = sep - start;
-        int len2 = end - (sep + 1);
+        int len1 = (int)(sep - start);
+        int len2 = (int)(end - (sep + 1));
 
         if (len1 > 0 && len1 < 31 && len2 > 0 && len2 < 31) {
             SwapRule *r = rules + ruleCount;
@@ -100,6 +102,10 @@ void ParseRuleContent(char *start, int isCbmMode) {
             r->newBody    = (char*)AllocMem(48);
             r->newHead    = (char*)AllocMem(48);
             r->newBodyAlt = (char*)AllocMem(64);
+
+            if (r->modelChar == NULL || r->fightChar == NULL || r->newBody == NULL || r->newHead == NULL || r->newBodyAlt == NULL) {
+                return;
+            }
 
             if (!isCbmMode) {
                 strncpy(r->modelChar, start, len1);
@@ -121,11 +127,13 @@ void ParseRuleContent(char *start, int isCbmMode) {
             sprintf(r->newHead, "HEAD_%s", r->modelChar);
 
             char *lowerModel = (char*)AllocMem(32);
-            strcpy(lowerModel, r->modelChar);
-            for (int k = 0; *(lowerModel + k); k++) {
-                *(lowerModel + k) = (char)MyToLower((unsigned char)(*(lowerModel + k)));
+            if (lowerModel != NULL) {
+                strcpy(lowerModel, r->modelChar);
+                for (int k = 0; *(lowerModel + k) != '\0'; k++) {
+                    *(lowerModel + k) = (char)MyToLower((unsigned char)(*(lowerModel + k)));
+                }
+                sprintf(r->newBodyAlt, "body_%s_alt.sec", lowerModel);
             }
-            sprintf(r->newBodyAlt, "body_%s_alt.sec", lowerModel);
 
             ruleCount++;
         }
@@ -134,11 +142,13 @@ void ParseRuleContent(char *start, int isCbmMode) {
 
 void ParseSettings(void) {
     rules = (SwapRule*)AllocMem(sizeof(SwapRule) * MAX_SWAPS);
+    if (rules == NULL) return;
+
     SceUID fd = sceIoOpen(INI_PATH, PSP_O_RDONLY, 0777);
     if (fd < 0) return;
 
     char *buffer = (char*)AllocMem(4096);
-    if (!buffer) {
+    if (buffer == NULL) {
         sceIoClose(fd);
         return;
     }
@@ -167,7 +177,7 @@ void ParseSettings(void) {
 }
 
 void ApplyPointerSwaps(void) {
-    if (ruleCount == 0 || !rules) return;
+    if (ruleCount == 0 || rules == NULL) return;
 
     unsigned int start_addr = 0x08800000;
     unsigned int end_addr   = 0x09800000;
@@ -177,13 +187,15 @@ void ApplyPointerSwaps(void) {
     char *targetAlt  = (char*)AllocMem(64);
     char *lowerFight = (char*)AllocMem(32);
 
+    if (targetBody == NULL || targetHead == NULL || targetAlt == NULL || lowerFight == NULL) return;
+
     for (int i = 0; i < ruleCount; i++) {
         SwapRule *r = rules + i;
         sprintf(targetBody, "BODY_%s", r->fightChar);
         sprintf(targetHead, "HEAD_%s", r->fightChar);
 
         strcpy(lowerFight, r->fightChar);
-        for (int k = 0; *(lowerFight + k); k++) {
+        for (int k = 0; *(lowerFight + k) != '\0'; k++) {
             *(lowerFight + k) = (char)MyToLower((unsigned char)(*(lowerFight + k)));
         }
         sprintf(targetAlt, "body_%s_alt.sec", lowerFight);
@@ -243,6 +255,11 @@ void DumpBonesToFile(void) {
     char *indent  = (char*)AllocMem(64);
     BoneNode *bones = (BoneNode*)AllocMem(sizeof(BoneNode) * MAX_BONES);
 
+    if (header == NULL || lineOut == NULL || indent == NULL || bones == NULL) {
+        sceIoClose(fd);
+        return;
+    }
+
     for (int k = 0; k < MAX_BONES; k++) {
         (bones + k)->name = (char*)AllocMem(36);
     }
@@ -250,7 +267,8 @@ void DumpBonesToFile(void) {
     for (unsigned int addr = start_addr; addr < end_addr; addr += 4) {
         if (memcmp((void*)addr, "BODY_", 5) == 0) {
             char *charName = (char*)(addr + 5);
-            if (strlen(charName) > 2 && strlen(charName) < 20 && MyIsUpper((unsigned char)(*charName))) {
+            int cLen = (int)strlen(charName);
+            if (cLen > 2 && cLen < 20 && MyIsUpper((unsigned char)(*charName))) {
                 int len = sprintf(header, "[%s]\r\n", charName);
                 sceIoWrite(fd, header, len);
 
@@ -261,51 +279,47 @@ void DumpBonesToFile(void) {
                 for (unsigned int bAddr = addr + 16; bAddr < scanLimit && boneCount < MAX_BONES; bAddr += 4) {
                     if (memcmp((void*)bAddr, "BONE_", 5) == 0 || memcmp((void*)bAddr, "BIP", 3) == 0) {
                         char *bName = (char*)bAddr;
-                        int nLen = strlen(bName);
+                        int nLen = (int)strlen(bName);
                         if (nLen > 3 && nLen < 32) {
                             BoneNode *curr = bones + boneCount;
-                            strcpy(curr->name, bName);
+                            if (curr->name != NULL) {
+                                strcpy(curr->name, bName);
 
-                            unsigned int rawId = *(unsigned int*)(bAddr - 8);
-                            int rawParent = *(int*)(bAddr - 4);
+                                unsigned int rawId = *(unsigned int*)(bAddr - 8);
+                                int rawParent = *(int*)(bAddr - 4);
 
-                            curr->id = (rawId < 256) ? rawId : (unsigned int)boneCount;
-                            curr->parentIndex = (rawParent >= -1 && rawParent < boneCount) ? rawParent : (boneCount - 1);
-                            boneCount++;
-                            bAddr += (nLen & ~3);
-                        }
-                    }
-                }
-
-                if (boneCount > 0) {
-                    WriteBoneHierarchy(fd, bones, boneCount, -1, 1, lineOut, indent);
-                } else {
-                    const char *noData = "    ; No active skeleton loaded in memory yet\r\n";
-                    sceIoWrite(fd, noData, strlen(noData));
-                }
-                sceIoWrite(fd, "\r\n", 2);
-            }
-        }
-    }
-
-    sceIoClose(fd);
+                                curr->id = (rawId < 256) ? rawId : (unsigned int)boneCount;
+                                curr->parentIndex = (rawParent >= -1 && rawParent < boneCount) ? rawParent : (boneCount - 1);
+                                boneCount++;
+                            }
+                            bAddr += (unsigned int)(nLen & ~3);
 }
-
+}
+}
+if (boneCount > 0) {
+WriteBoneHierarchy(fd, bones, boneCount, -1, 1, lineOut, indent);
+} else {
+const char *noData = "    ; No active skeleton loaded in memory yet\r\n";
+sceIoWrite(fd, noData, (int)strlen(noData));
+}
+sceIoWrite(fd, "\r\n", 2);
+}
+}
+}
+sceIoClose(fd);
+}
 int MainThread(SceSize args, void *argp) {
-    InitMemory();
-    ParseSettings();
-
-    if (ruleCount > 0) {
-        sceKernelDelayThread(4000000);
-        ApplyPointerSwaps();
-    }
-
-    if (bGetBons) {
-        sceKernelDelayThread(12000000);
-        DumpBonesToFile();
-    }
-
-    return sceKernelExitDeleteThread(0);
+InitMemory();
+ParseSettings();
+if (ruleCount > 0) {
+sceKernelDelayThread(4000000);
+ApplyPointerSwaps();
+}
+if (bGetBons) {
+sceKernelDelayThread(12000000);
+DumpBonesToFile();
+}
+return sceKernelExitDeleteThread(0);
 }
 int module_start(SceSize args, void *argp) {
 SceUID thid = sceKernelCreateThread("MKSwapThread", MainThread, 0x18, 0x10000, 0, NULL);
